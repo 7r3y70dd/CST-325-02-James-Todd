@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Project 1</title>
+    <script>
+        var sceneList = [];
+
+        var currentFrameNumber = 0;
+
+        function Rectangle(x, y, color) {
+            this.x = x;
+            this.y = y;
+            this.color = color;
+
+            this.draw = function() {
+                var myCanvas = document.getElementById('myCanvas');
+                var context = myCanvas.getContext('2d');
+                context.fillStyle = this.color;
+                context.fillRect(this.x, this.y, 100, 75);
+                context.strokeStyle = 'black';
+                context.lineWidth = 2;
+                context.strokeRect(this.x, this.y, 100, 75);
+            };
+        }
+
+        function updateAndDraw() {
+            var myCanvas = document.getElementById('myCanvas');
+            var context = myCanvas.getContext('2d');
+            context.clearRect(0, 0, myCanvas.width, myCanvas.height);
+            for (var i = 0; i < sceneList.length; i++) {
+                sceneList[i].draw();
+            }
+            currentFrameNumber++;
+            console.log("Frame Number: " + currentFrameNumber);
+            updateStats();
+            requestAnimationFrame(updateAndDraw);
+        }
+
+        function updateStats() {
+            var frame = document.getElementById("frameCount");
+            if (frame) {
+                frame.innerText = "Frame Count: " + currentFrameNumber;
+            }
+            var rectangle = document.getElementById("rectangleCount");
+            if (rectangle) {
+                rectangle.innerText = "Rectangle Count: " + sceneList.length;
+            }
+        }
+
+        function init() {
+            console.log("Hello World!");
+            var rectangle1 = new Rectangle(50, 50, "rgb(0, 255, 0)");
+            var rectangle2 = new Rectangle(160, 50, "rgb(255, 0, 0)");
+            var rectangle3 = new Rectangle(270, 50, "rgb(0, 0, 255)");
+            sceneList.push(rectangle1);
+            sceneList.push(rectangle2);
+            sceneList.push(rectangle3);
+            requestAnimationFrame(updateAndDraw);
+        }
+
+    </script>
+</head>
+<body onload="init()">
+<canvas id="myCanvas" width="600" height="300" style="border:1px solid gray;"></canvas>
+<p id="frameCount">Frame Count: 0</p>
+<p id="rectangleCount">Rectangle Count: 0</p>
+<br>
+</body>
+</html>
