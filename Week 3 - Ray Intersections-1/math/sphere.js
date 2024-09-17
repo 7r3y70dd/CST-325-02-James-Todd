@@ -86,34 +86,29 @@ Sphere.prototype = {
       distance: null
     };
 
-    // Vector from ray origin to sphere center
     var L = this.center.subtract(r1.origin);
     var tca = L.dot(r1.direction);
     var d2 = L.dot(L) - tca * tca;
     var radius2 = this.radius * this.radius;
 
-    // Check if the ray misses the sphere
     if (d2 > radius2) {
-      return result; // No intersection
+      return result;
     }
 
     var thc = Math.sqrt(radius2 - d2);
     var t0 = tca - thc;
     var t1 = tca + thc;
 
-    // Ensure t0 is the smaller value
     if (t0 > t1) {
       var temp = t0;
       t0 = t1;
       t1 = temp;
     }
 
-    // If both intersection points are behind the ray
     if (t1 < 0) {
-      return result; // Both intersections are behind the ray
+      return result;
     }
 
-    // Select the closest positive intersection
     var t = t0 < 0 ? t1 : t0;
     if (t < 0) {
       return result;
