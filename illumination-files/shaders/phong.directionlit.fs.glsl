@@ -35,7 +35,7 @@ void main(void) {
 
     // todo #8 apply light and material interaction for phong, assume phong material color is (0.3, 0.3, 0.3)
     vec3 specularMaterialColor = vec3(0.3, 0.3, 0.3);
-    vec3 lightColor = vec3(1.0, 1.0, 1.0);  // light color can remain constant
+    vec3 lightColor = vec3(1.0, 1.0, 1.0);
 
     vec3 ambient = materialColor * 0.1;
     vec3 diffuseColor = materialColor * lambertTerm;
