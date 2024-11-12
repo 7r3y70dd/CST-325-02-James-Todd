@@ -133,22 +133,22 @@ function updateAndRender() {
 
     // todo #10
         if (appInput.up) {
-            lightDirection.y += 0.1; // Move the light up
+            lightDirection.y += 0.1;
         }
         if (appInput.down) {
-            lightDirection.y -= 0.1; // Move the light down
+            lightDirection.y -= 0.1;
         }
         if (appInput.left) {
-            lightDirection.x -= 0.1; // Move the light left
+            lightDirection.x -= 0.1;
         }
         if (appInput.right) {
-            lightDirection.x += 0.1; // Move the light right
+            lightDirection.x += 0.1;
         }
         if (appInput.w) {
-            lightDirection.z += 0.1; // Move the light forward
+            lightDirection.z += 0.1;
         }
         if (appInput.s) {
-            lightDirection.z -= 0.1; // Move the light backward
+            lightDirection.z -= 0.1;
         }
 
     time.update();
