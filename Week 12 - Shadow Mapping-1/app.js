@@ -215,6 +215,7 @@ function updateAndRender() {
 
     // todo #11 Make sure lighPos and directionToLight move in a synchronized fashion
 
+
     // Rotate the light direction
     var rotationMatrix = pitchMatrix.clone().multiply(yawMatrix);
     directionToLight = rotationMatrix.multiplyVector(directionToLight);
@@ -222,13 +223,19 @@ function updateAndRender() {
     // Rotate the position where the light-camera position will move to
     lightPos = rotationMatrix.multiplyVector(lightPos);
 
+
     var lightTarget = new Vector4(0, 0, 0, 1);
     var up = new Vector4(0, 1, 0, 0);
+
+//    var lightViewMatrix = new Matrix4().makeLookAt(lightPos, lightTarget, up);
 
     // todo #1 - Set up a camera that points in the direction of the light at a
     // reasonably close position such that the scene will be in the view volume.
     // We will set up the view volume boundaries with an orthographics projection later.
-    // lightCamera.cameraWorldMatrix.makeLookAt(?, ?, ?);
+    let eyePos = new Vector3(lightPos.x, lightPos.y, lightPos.z);
+    let targetPos = new Vector3(0, 0, 0);
+    let worldUp = new Vector3(0, 1, 0);
+    lightCamera.cameraWorldMatrix.makeLookAt(eyePos, targetPos, worldUp);
 
     camera.update(time.deltaTime);
 
@@ -244,7 +251,7 @@ function updateAndRender() {
     gl.viewport(0, 0, fbo.width, fbo.height);
 
     // todo #2 - set up the view volume boundaries
-    // shadowProjectionMatrix.makeOrthographic(...);
+     shadowProjectionMatrix.makeOrthographic(-10, 10, 10, -10, 1, 20);
 
     gl.disable(gl.CULL_FACE);
     groundGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
