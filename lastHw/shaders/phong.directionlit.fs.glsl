@@ -1,6 +1,6 @@
 precision mediump float;
 
-uniform vec3 uLightPosition;
+uniform vec3 uLightDirection;
 uniform vec3 uCameraPosition;
 uniform sampler2D uTexture;
 
@@ -11,7 +11,7 @@ varying vec3 vWorldPosition;
 void main(void) {
     // diffuse contribution
     // todo #1 normalize the light direction and store in a separate variable
-    vec3 normalizedLightDir = normalize(uLightPosition);
+    vec3 normalizedLightDir = normalize(uLightDirection);
 
     // todo #2 normalize the world normal and store in a separate variable
     vec3 normalizedWorldNormal = normalize(vWorldNormal);
