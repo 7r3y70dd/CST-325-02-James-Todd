@@ -7,8 +7,10 @@ var time = new Time();
 var camera = new OrbitCamera(appInput); // used to create the view matrix for our normal "eye"
 var lightCamera = new Camera();         // used to create the view matrix for our light's point of view
 
-var teapotGeometry = null;
-var groundGeometry = null;
+var sphereGeometry = null;
+var skyboxGeometry = null;
+var skyboxShaderProgram = null;
+var skyboxTexture = null;
 
 // the projection from our normal eye's view space to its clip space
 var projectionMatrix = new Matrix4();
@@ -45,6 +47,12 @@ var loadedAssets = {
 function initializeAndStartRendering() {
     initGL();
     loadAssets(function() {
+        // Set the canvas background to the stars.jpg image
+        const canvas = document.getElementById("webgl-canvas");
+        canvas.style.background = "url('./data/stars.jpg')"; // Path to stars.jpg
+        canvas.style.backgroundSize = "cover"; // Ensure it covers the canvas fully
+        canvas.style.backgroundPosition = "center"; // Center the image
+
         createShaders(loadedAssets);
         createScene();
         createFrameBufferResources();
@@ -75,27 +83,73 @@ function loadAssets(onLoadedCB) {
     var filePromises = [
         fetch('./shaders/phong.vs.glsl').then((response) => { return response.text(); }),
         fetch('./shaders/phong.fs.glsl').then((response) => { return response.text(); }),
-        fetch('./data/teapot.json').then((response) => { return response.json(); }),
+        fetch('./data/sphere.json').then((response) => { return response.json(); }), // Load sphere JSON
         fetch('./shaders/depth-write.vs.glsl').then((response) => { return response.text(); }),
         fetch('./shaders/depth-write.fs.glsl').then((response) => { return response.text(); }),
-        loadImage('./data/marble.jpg'),
-        loadImage('./data/wood-floor.jpg'),
+        loadImage('./data/th.jpg'),
+        loadImage('./data/stars.jpg')
     ];
 
     Promise.all(filePromises).then(function(values) {
-        // Assign loaded data to our named variables
         loadedAssets.phongTextVS = values[0];
         loadedAssets.phongTextFS = values[1];
-        loadedAssets.teapotJSON = values[2];
+        loadedAssets.sphereJSON = values[2]; // Save sphere JSON
         loadedAssets.depthWriteVS = values[3];
         loadedAssets.depthWriteFS = values[4];
         loadedAssets.marbleImage = values[5];
-        loadedAssets.woodImage = values[6];
     }).catch(function(error) {
         console.error(error.message);
     }).finally(function() {
         onLoadedCB();
     });
+}
+
+function createSkybox() {
+    // Create a cube map
+    const skyboxTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+
+    const targets = [
+        gl.TEXTURE_CUBE_MAP_POSITIVE_X,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
+        gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
+        gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_Z
+    ];
+
+    loadedAssets.skyboxImages.forEach((image, i) => {
+        gl.texImage2D(targets[i], 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    });
+
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    return skyboxTexture;
+}
+
+function renderSkybox() {
+    gl.useProgram(skyboxShaderProgram);
+
+    const uniforms = skyboxShaderProgram.uniforms;
+    gl.uniformMatrix4fv(uniforms.uProjectionMatrix, false, projectionMatrix.elements);
+
+    // Remove translation from the view matrix for the skybox
+    const viewMatrixNoTranslation = camera.getViewMatrix().clone();
+    viewMatrixNoTranslation.elements[12] = 0;
+    viewMatrixNoTranslation.elements[13] = 0;
+    viewMatrixNoTranslation.elements[14] = 0;
+
+    gl.uniformMatrix4fv(uniforms.uViewMatrix, false, viewMatrixNoTranslation.elements);
+
+    // Bind the cube map texture
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+
+    // Render the cube geometry
+    skyboxGeometry.render();
 }
 
 // -------------------------------------------------------------------------
@@ -134,28 +188,15 @@ function createShaders(loadedAssets) {
 
 // -------------------------------------------------------------------------
 function createScene() {
-    teapotGeometry = new WebGLGeometryJSON(gl, phongShaderProgram);
-    teapotGeometry.create(loadedAssets.teapotJSON, loadedAssets.marbleImage);
+    // Replace teapot with a sphere
+    sphereGeometry = new WebGLGeometryJSON(gl, phongShaderProgram);
 
-    var scale = new Matrix4().makeScale(0.03, 0.03, 0.03);
+    // Use sphere.json or equivalent
+    sphereGeometry.create(loadedAssets.sphereJSON, loadedAssets.marbleImage);
 
-    // compensate for the model being flipped on its side
-    var rotation = new Matrix4().makeRotationX(-90);
-
-    teapotGeometry.worldMatrix.makeIdentity();
-    teapotGeometry.worldMatrix.multiply(rotation);
-    teapotGeometry.worldMatrix.multiply(scale);
-
-    groundGeometry = new WebGLGeometryQuad(gl, phongShaderProgram);
-    groundGeometry.create(loadedAssets.woodImage);
-
-    // make it bigger
-    var groundScale = new Matrix4().makeScale(10.0, 10.0, 10.0);
-
-    // compensate for the model being flipped on its side
-    var groundRotation = new Matrix4().makeRotationX(-90);
-
-    groundGeometry.worldMatrix.multiply(groundRotation).multiply(groundScale);
+    var scale = new Matrix4().makeScale(0.5, 0.5, 0.5); // Scale the sphere appropriately
+    sphereGeometry.worldMatrix.makeIdentity();
+    sphereGeometry.worldMatrix.multiply(scale);
 }
 
 // -------------------------------------------------------------------------
@@ -196,6 +237,73 @@ function createFrameBufferResources() {
 }
 
 // -------------------------------------------------------------------------
+//function updateAndRender() {
+//    requestAnimationFrame(updateAndRender);
+//
+//    // Get the latest values for deltaTime and elapsedTime
+//    time.update();
+//
+//    var aspectRatio = gl.canvasWidth / gl.canvasHeight;
+//
+//    var yaw = 0, pitch = 0;
+//    if (appInput.a) yaw -= 1;
+//    if (appInput.d) yaw += 1;
+//    if (appInput.w) pitch -= 1;
+//    if (appInput.s) pitch += 1;
+//
+//    var yawMatrix = new Matrix4().makeRotationY(45.0 * time.deltaTime * yaw);
+//    var pitchMatrix = new Matrix4().makeRotationX(45.0 * time.deltaTime * pitch);
+//
+//    // Rotate the light direction and position
+//    var rotationMatrix = pitchMatrix.clone().multiply(yawMatrix);
+//    directionToLight = rotationMatrix.multiplyVector(directionToLight);
+//    lightPos = rotationMatrix.multiplyVector(lightPos);
+//
+//    let eyePos = new Vector3(lightPos.x, lightPos.y, lightPos.z);
+//    let targetPos = new Vector3(0, 0, 0);
+//    let worldUp = new Vector3(0, 1, 0);
+//    lightCamera.cameraWorldMatrix.makeLookAt(eyePos, targetPos, worldUp);
+//
+//    camera.update(time.deltaTime);
+//
+//    // Render scene depth to texture
+//    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+//    gl.bindRenderbuffer(gl.RENDERBUFFER, renderBuffer);
+//
+//    gl.clearColor(0, 1, 0, 1.0);
+//    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+//
+//    // Specify what portion of the canvas to draw to (full width and height)
+//    gl.viewport(0, 0, fbo.width, fbo.height);
+//
+//    shadowProjectionMatrix.makeOrthographic(-10, 10, 10, -10, 1, 20);
+//
+//    sphereGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
+//
+//    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+//    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+//
+//    // Render scene normally and apply shadows
+//    console.log("Camera Position:", camera.getPosition());
+//    console.log("Camera View Matrix:", camera.getViewMatrix().elements);
+//    console.log("Sphere World Matrix:", sphereGeometry.worldMatrix.elements);
+//
+//    gl.viewport(0, 0, gl.canvasWidth, gl.canvasHeight);
+//
+//
+//    var lightVPMatrix = shadowProjectionMatrix.clone().multiply(lightCamera.getViewMatrix());
+//
+//    gl.useProgram(phongShaderProgram);
+//    var uniforms = phongShaderProgram.uniforms;
+//    var cameraPosition = camera.getPosition();
+//    gl.uniform3f(uniforms.directionToLightUniform, directionToLight.x, directionToLight.y, directionToLight.z);
+//    gl.uniform3f(uniforms.cameraPositionUniform, cameraPosition.x, cameraPosition.y, cameraPosition.z);
+//    gl.uniformMatrix4fv(uniforms.lightVPMatrixUniform, false, lightVPMatrix.transpose().elements);
+//
+//    projectionMatrix.makePerspective(45, aspectRatio, 0.1, 1000);
+//    sphereGeometry.render(camera, projectionMatrix, phongShaderProgram, renderTexture);
+//}
+// -------------------------------------------------------------------------
 function updateAndRender() {
     requestAnimationFrame(updateAndRender);
 
@@ -213,25 +321,11 @@ function updateAndRender() {
     var yawMatrix = new Matrix4().makeRotationY(45.0 * time.deltaTime * yaw);
     var pitchMatrix = new Matrix4().makeRotationX(45.0 * time.deltaTime * pitch);
 
-    // todo #11 Make sure lighPos and directionToLight move in a synchronized fashion
-
-
-    // Rotate the light direction
+    // Rotate the light direction and position
     var rotationMatrix = pitchMatrix.clone().multiply(yawMatrix);
     directionToLight = rotationMatrix.multiplyVector(directionToLight);
-
-    // Rotate the position where the light-camera position will move to
     lightPos = rotationMatrix.multiplyVector(lightPos);
 
-
-    var lightTarget = new Vector4(0, 0, 0, 1);
-    var up = new Vector4(0, 1, 0, 0);
-
-//    var lightViewMatrix = new Matrix4().makeLookAt(lightPos, lightTarget, up);
-
-    // todo #1 - Set up a camera that points in the direction of the light at a
-    // reasonably close position such that the scene will be in the view volume.
-    // We will set up the view volume boundaries with an orthographics projection later.
     let eyePos = new Vector3(lightPos.x, lightPos.y, lightPos.z);
     let targetPos = new Vector3(0, 0, 0);
     let worldUp = new Vector3(0, 1, 0);
@@ -239,39 +333,34 @@ function updateAndRender() {
 
     camera.update(time.deltaTime);
 
-    // render scene depth to texture ##################
+    // Rotate the sphere
+    var rotationSpeed = 20; // Degrees per second
+    var sphereRotation = new Matrix4().makeRotationY(rotationSpeed * time.deltaTime);
+    sphereGeometry.worldMatrix.multiply(sphereRotation);
 
+    // Render scene depth to texture
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.bindRenderbuffer(gl.RENDERBUFFER, renderBuffer);
 
     gl.clearColor(0, 1, 0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // specify what portion of the canvas we want to draw to (all of it, full width and height)
+    // Specify what portion of the canvas to draw to (full width and height)
     gl.viewport(0, 0, fbo.width, fbo.height);
 
-    // todo #2 - set up the view volume boundaries
-     shadowProjectionMatrix.makeOrthographic(-10, 10, 10, -10, 1, 20);
+    shadowProjectionMatrix.makeOrthographic(-10, 10, 10, -10, 1, 20);
 
-    gl.disable(gl.CULL_FACE);
-    groundGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
-    teapotGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
+    sphereGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.bindRenderbuffer(gl.RENDERBUFFER, null);
 
-    // render scene normally and use the depth texture to apply shadows ################
+    // Render scene normally and apply shadows
+    console.log("Camera Position:", camera.getPosition());
+    console.log("Camera View Matrix:", camera.getViewMatrix().elements);
+    console.log("Sphere World Matrix:", sphereGeometry.worldMatrix.elements);
 
-        console.log("Camera Position:", camera.getPosition());
-        console.log("Camera View Matrix:", camera.getViewMatrix().elements);
-        console.log("Sphere World Matrix:", teapotGeometry.worldMatrix.elements);
-
-    // specify what portion of the canvas we want to draw to (all of it, full width and height)
     gl.viewport(0, 0, gl.canvasWidth, gl.canvasHeight);
-
-    // this is a new frame so let's clear out whatever happened last frame
-    gl.clearColor(0.707, 0.707, 1, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     var lightVPMatrix = shadowProjectionMatrix.clone().multiply(lightCamera.getViewMatrix());
 
@@ -283,8 +372,6 @@ function updateAndRender() {
     gl.uniformMatrix4fv(uniforms.lightVPMatrixUniform, false, lightVPMatrix.transpose().elements);
 
     projectionMatrix.makePerspective(45, aspectRatio, 0.1, 1000);
-    gl.enable(gl.CULL_FACE);
-    groundGeometry.render(camera, projectionMatrix, phongShaderProgram, renderTexture);
-    teapotGeometry.render(camera, projectionMatrix, phongShaderProgram, renderTexture);
+    sphereGeometry.render(camera, projectionMatrix, phongShaderProgram, renderTexture);
 }
 
