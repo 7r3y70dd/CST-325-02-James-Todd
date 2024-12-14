@@ -10,7 +10,7 @@ var lightCamera = new Camera();         // used to create the view matrix for ou
 var sphereGeometry = null;
 var skyboxGeometry = null;
 var skyboxShaderProgram = null;
-var skyboxTexture = null;
+var smallSphereGeometry = null;
 
 // the projection from our normal eye's view space to its clip space
 var projectionMatrix = new Matrix4();
@@ -22,12 +22,13 @@ var shadowProjectionMatrix = new Matrix4();
 var lightPos = new Vector4(5, 3, 0, 1);
 var directionToLight = new Vector4(lightPos.x, lightPos.y, lightPos.z, 0).normalize();
 
-// the shader used to render depth values from the light's point of view
 var depthWriteProgram;
+
+
+
 
 // the shader program used to apply phong shading (will include shadow test)
 var phongShaderProgram;
-
 // variables holding references to things we need to render to an offscreen texture
 var fbo;
 var renderTexture;
@@ -86,8 +87,9 @@ function loadAssets(onLoadedCB) {
         fetch('./data/sphere.json').then((response) => { return response.json(); }), // Load sphere JSON
         fetch('./shaders/depth-write.vs.glsl').then((response) => { return response.text(); }),
         fetch('./shaders/depth-write.fs.glsl').then((response) => { return response.text(); }),
-        loadImage('./data/th.jpg'),
-        loadImage('./data/stars.jpg')
+        loadImage('./data/sun.jpg'),
+        loadImage('./data/stars.jpg'),
+        loadImage('./data/2k_earth_daymap.jpg')
     ];
 
     Promise.all(filePromises).then(function(values) {
@@ -97,6 +99,7 @@ function loadAssets(onLoadedCB) {
         loadedAssets.depthWriteVS = values[3];
         loadedAssets.depthWriteFS = values[4];
         loadedAssets.marbleImage = values[5];
+        loadedAssets.earth = values[7];
     }).catch(function(error) {
         console.error(error.message);
     }).finally(function() {
@@ -104,31 +107,31 @@ function loadAssets(onLoadedCB) {
     });
 }
 
-function createSkybox() {
-    // Create a cube map
-    const skyboxTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
-
-    const targets = [
-        gl.TEXTURE_CUBE_MAP_POSITIVE_X,
-        gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
-        gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
-        gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
-        gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
-        gl.TEXTURE_CUBE_MAP_NEGATIVE_Z
-    ];
-
-    loadedAssets.skyboxImages.forEach((image, i) => {
-        gl.texImage2D(targets[i], 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-    });
-
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-    return skyboxTexture;
-}
+//function createSkybox() {
+//    // Create a cube map
+//    const skyboxTexture = gl.createTexture();
+//    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+//
+//    const targets = [
+//        gl.TEXTURE_CUBE_MAP_POSITIVE_X,
+//        gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
+//        gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
+//        gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
+//        gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
+//        gl.TEXTURE_CUBE_MAP_NEGATIVE_Z
+//    ];
+//
+//    loadedAssets.skyboxImages.forEach((image, i) => {
+//        gl.texImage2D(targets[i], 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+//    });
+//
+//    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+//    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+//    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+//    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+//
+//    return skyboxTexture;
+//}
 
 function renderSkybox() {
     gl.useProgram(skyboxShaderProgram);
@@ -191,14 +194,23 @@ function createScene() {
     // Replace teapot with a sphere
     sphereGeometry = new WebGLGeometryJSON(gl, phongShaderProgram);
 
+    smallSphereGeometry = new WebGLGeometryJSON(gl, phongShaderProgram);
     // Use sphere.json or equivalent
     sphereGeometry.create(loadedAssets.sphereJSON, loadedAssets.marbleImage);
+    smallSphereGeometry.create(loadedAssets.sphereJSON, loadedAssets.earth);
 
-    var scale = new Matrix4().makeScale(0.5, 0.5, 0.5); // Scale the sphere appropriately
+    var scale = new Matrix4().makeScale(0.1, 0.1, 0.1); // Scale the sphere appropriately
     sphereGeometry.worldMatrix.makeIdentity();
     sphereGeometry.worldMatrix.multiply(scale);
-}
 
+    var transfer = new Matrix4().makeTranslation(7, 7, 7);
+    var scale = new Matrix4().makeScale(0.02, 0.02, 0.02);
+    smallSphereGeometry.worldMatrix.makeIdentity();
+    smallSphereGeometry.worldMatrix.multiply(transfer).multiply(scale);
+//    smallSphereGeometry.worldMatrix.multiply(scale);
+
+
+}
 // -------------------------------------------------------------------------
 function createFrameBufferResources() {
     var dimension = 2048;
@@ -338,9 +350,17 @@ function updateAndRender() {
     var sphereRotation = new Matrix4().makeRotationY(rotationSpeed * time.deltaTime);
     sphereGeometry.worldMatrix.multiply(sphereRotation);
 
+    var rotationSpeed = 20; // Degrees per second
+    var sphereRotation = new Matrix4().makeRotationY(rotationSpeed * time.deltaTime);
+    smallSphereGeometry.worldMatrix.multiply(sphereRotation);
+//    smallSphereGeometry.worldMatrix.multiply(sphereGeometry.worldMatrix);
+
     // Render scene depth to texture
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.bindRenderbuffer(gl.RENDERBUFFER, renderBuffer);
+
+    console.log("Sun Position:", sphereGeometry.worldMatrix.elements.slice(12, 15));
+    console.log("Earth Position:", smallSphereGeometry.worldMatrix.elements.slice(12, 15))
 
     gl.clearColor(0, 1, 0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -350,15 +370,19 @@ function updateAndRender() {
 
     shadowProjectionMatrix.makeOrthographic(-10, 10, 10, -10, 1, 20);
 
-    sphereGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
+//    sphereGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
+
+//    smallSphereGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.bindRenderbuffer(gl.RENDERBUFFER, null);
 
     // Render scene normally and apply shadows
-    console.log("Camera Position:", camera.getPosition());
-    console.log("Camera View Matrix:", camera.getViewMatrix().elements);
+//    console.log("Camera Position:", camera.getPosition());
+//    console.log("Camera View Matrix:", camera.getViewMatrix().elements);
     console.log("Sphere World Matrix:", sphereGeometry.worldMatrix.elements);
+    console.log("bg Sphere World Matrix:", sphereGeometry.worldMatrix.elements);
+
 
     gl.viewport(0, 0, gl.canvasWidth, gl.canvasHeight);
 
@@ -373,5 +397,87 @@ function updateAndRender() {
 
     projectionMatrix.makePerspective(45, aspectRatio, 0.1, 1000);
     sphereGeometry.render(camera, projectionMatrix, phongShaderProgram, renderTexture);
+    smallSphereGeometry.render(camera, projectionMatrix, phongShaderProgram, renderTexture);
 }
+//function updateAndRender() {
+//    requestAnimationFrame(updateAndRender);
+//
+//    // Get the latest values for deltaTime and elapsedTime
+//    time.update();
+//
+//    var aspectRatio = gl.canvasWidth / gl.canvasHeight;
+//
+//    var yaw = 0, pitch = 0;
+//    if (appInput.a) yaw -= 1;
+//    if (appInput.d) yaw += 1;
+//    if (appInput.w) pitch -= 1;
+//    if (appInput.s) pitch += 1;
+//
+//    var yawMatrix = new Matrix4().makeRotationY(45.0 * time.deltaTime * yaw);
+//    var pitchMatrix = new Matrix4().makeRotationX(45.0 * time.deltaTime * pitch);
+//
+//    // Rotate the light direction and position
+//    var rotationMatrix = pitchMatrix.clone().multiply(yawMatrix);
+//    directionToLight = rotationMatrix.multiplyVector(directionToLight);
+//    lightPos = rotationMatrix.multiplyVector(lightPos);
+//
+//    let eyePos = new Vector3(lightPos.x, lightPos.y, lightPos.z);
+//    let targetPos = new Vector3(0, 0, 0);
+//    let worldUp = new Vector3(0, 1, 0);
+//    lightCamera.cameraWorldMatrix.makeLookAt(eyePos, targetPos, worldUp);
+//
+//    camera.update(time.deltaTime);
+//
+//    // Rotate the main sphere
+//    var rotationSpeed = 20; // Degrees per second
+//    var sphereRotation = new Matrix4().makeRotationY(rotationSpeed * time.deltaTime);
+//    sphereGeometry.worldMatrix.multiply(sphereRotation);
+//
+//    // Orbit the smaller sphere around the main sphere
+//    var orbitRadius = 1.0; // Distance from the main sphere
+//    var orbitSpeed = 40; // Degrees per second
+//    var orbitRotation = new Matrix4().makeRotationY(orbitSpeed * time.elapsedTime);
+//
+//    // Position the smaller sphere
+//    var orbitTranslation = new Matrix4().makeTranslation(orbitRadius, 0, 0);
+//    smallSphereGeometry.worldMatrix.makeIdentity();
+//    smallSphereGeometry.worldMatrix.multiply(orbitRotation).multiply(orbitTranslation);
+//
+//    // Render scene depth to texture
+//    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+//    gl.bindRenderbuffer(gl.RENDERBUFFER, renderBuffer);
+//
+//    gl.clearColor(0, 1, 0, 1.0);
+//    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+//
+//    // Specify what portion of the canvas to draw to (full width and height)
+//    gl.viewport(0, 0, fbo.width, fbo.height);
+//
+//    shadowProjectionMatrix.makeOrthographic(-10, 10, 10, -10, 1, 20);
+//
+//    sphereGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
+//    smallSphereGeometry.render(lightCamera, shadowProjectionMatrix, depthWriteProgram);
+//
+//    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+//    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+//
+//    // Render scene normally and apply shadows
+//    gl.viewport(0, 0, gl.canvasWidth, gl.canvasHeight);
+//
+//    gl.clearColor(0.707, 0.707, 1, 1.0);
+//    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+//
+//    var lightVPMatrix = shadowProjectionMatrix.clone().multiply(lightCamera.getViewMatrix());
+//
+//    gl.useProgram(phongShaderProgram);
+//    var uniforms = phongShaderProgram.uniforms;
+//    var cameraPosition = camera.getPosition();
+//    gl.uniform3f(uniforms.directionToLightUniform, directionToLight.x, directionToLight.y, directionToLight.z);
+//    gl.uniform3f(uniforms.cameraPositionUniform, cameraPosition.x, cameraPosition.y, cameraPosition.z);
+//    gl.uniformMatrix4fv(uniforms.lightVPMatrixUniform, false, lightVPMatrix.transpose().elements);
+//
+//    projectionMatrix.makePerspective(45, aspectRatio, 0.1, 1000);
+//    sphereGeometry.render(camera, projectionMatrix, phongShaderProgram, renderTexture);
+//    smallSphereGeometry.render(camera, projectionMatrix, phongShaderProgram, renderTexture);
+//}
 
