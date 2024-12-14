@@ -1,3 +1,5 @@
+//James Todd
+
 'use strict'
 
 var gl;
